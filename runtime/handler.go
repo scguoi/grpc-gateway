@@ -38,11 +38,18 @@ func ForwardResponseStream(ctx context.Context, mux *ServeMux, marshaler Marshal
 		return
 	}
 
+	accept := req.Header.Get("Accept")
+	useSSE := strings.Contains(accept, "text/event-stream")
+
 	var delimiter []byte
 	if d, ok := marshaler.(Delimited); ok {
 		delimiter = d.Delimiter()
 	} else {
 		delimiter = []byte("\n")
+	}
+
+	if useSSE {
+		delimiter = []byte("\n\n")
 	}
 
 	var wroteHeader bool
@@ -61,7 +68,14 @@ func ForwardResponseStream(ctx context.Context, mux *ServeMux, marshaler Marshal
 		}
 
 		if !wroteHeader {
-			w.Header().Set("Content-Type", marshaler.ContentType(resp))
+			if !useSSE {
+				w.Header().Set("Content-Type", marshaler.ContentType(resp))
+			} else {
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.Header().Set("Cache-Control", "no-cache")
+				w.Header().Set("Connection", "keep-alive")
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			}
 		}
 
 		var buf []byte
@@ -85,6 +99,11 @@ func ForwardResponseStream(ctx context.Context, mux *ServeMux, marshaler Marshal
 			handleForwardResponseStreamError(ctx, wroteHeader, marshaler, w, req, mux, err, delimiter)
 			return
 		}
+
+		if useSSE {
+			buf = append([]byte("data: "), buf...)
+		}
+
 		if _, err := w.Write(buf); err != nil {
 			grpclog.Infof("Failed to send response chunk: %v", err)
 			return
