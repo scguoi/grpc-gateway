@@ -12,6 +12,10 @@ gRPC to JSON proxy generator following the gRPC HTTP spec
 
 </div>
 
+## Extend
+
+Add sse support when with header Accept: text/event-stream
+
 ## About
 
 The gRPC-Gateway is a plugin of the Google protocol buffers compiler
